@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: vetclinic-postgres
+    environment:
+      POSTGRES_USER: vetclinic
+      POSTGRES_PASSWORD: vetclinic_password
+      POSTGRES_DB: vetclinic
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - vetclinic-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: vetclinic-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - vetclinic-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: vetclinic-backend
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://vetclinic:vetclinic_password@postgres:5432/vetclinic?schema=public
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EVOLUTION_API_URL=${EVOLUTION_API_URL:-http://evolution:8080}
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
+      - EVOLUTION_INSTANCE=${EVOLUTION_INSTANCE:-vetclinic}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - vetclinic-network
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: vetclinic-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - vetclinic-network
+
+  # Evolution API (WhatsApp)
+  evolution:
+    image: atendai/evolution-api:latest
+    container_name: vetclinic-evolution
+    environment:
+      - SERVER_URL=http://localhost:8080
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://vetclinic:vetclinic_password@postgres:5432/vetclinic?schema=evolution
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - DATABASE_SAVE_MESSAGE_UPDATE=true
+      - DATABASE_SAVE_DATA_CONTACTS=true
+      - DATABASE_SAVE_DATA_CHATS=true
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://redis:6379
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - vetclinic-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  vetclinic-network:
+    driver: bridge

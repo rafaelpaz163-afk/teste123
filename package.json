@@ -1,0 +1,20 @@
+{
+  "name": "vet-clinic-ai",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently npm:dev:*",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "npm run build -w frontend && npm run build -w backend",
+    "deploy": "vercel --prod"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "vercel": "^33.0.0"
+  }
+}
