@@ -1,0 +1,266 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enum definitions
+enum Role {
+  ADMIN
+  RECEPTIONIST
+}
+
+enum ConversationStatus {
+  NEW
+  AI_HANDLING
+  HUMAN_HANDLING
+  WAITING_CUSTOMER
+  FINISHED
+}
+
+enum MessageSender {
+  CUSTOMER
+  AI
+  HUMAN
+  SYSTEM
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum LeadStatus {
+  INTERESTED
+  READY_TO_SCHEDULE
+  NO_RESPONSE
+  LOST
+  RECOVERED
+}
+
+// User model (Admin/Recepcionista)
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String
+  name          String
+  role          Role           @default(RECEPTIONIST)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  conversations Conversation[] @relation("AssignedConversations")
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+// Tutor (Cliente/Dono do pet)
+model Tutor {
+  id            String         @id @default(uuid())
+  name          String
+  cpf           String?        @unique
+  rg            String?
+  birthDate     DateTime?
+  email         String?
+  phone         String         @unique
+  cep           String?
+  houseNumber   String?
+  complement    String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  pets          Pet[]
+  conversations Conversation[]
+  appointments  Appointment[]
+  leads         Lead[]
+
+  @@map("tutors")
+}
+
+// Pet model
+model Pet {
+  id              String         @id @default(uuid())
+  name            String
+  species         String
+  breed           String?
+  sex             String
+  birthDate       DateTime?
+  ageApprox       String?
+  furColor        String?
+  isNeutered      Boolean?
+  tutorId         String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  tutor           Tutor          @relation(fields: [tutorId], references: [id])
+  appointments    Appointment[]
+
+  @@map("pets")
+}
+
+// Conversation (Sessão de chat)
+model Conversation {
+  id              String              @id @default(uuid())
+  tutorId         String?
+  tutor           Tutor?              @relation(fields: [tutorId], references: [id])
+  phoneNumber     String
+  status          ConversationStatus  @default(NEW)
+  isAiActive      Boolean             @default(true)
+  assignedToId    String?
+  assignedTo      User?               @relation("AssignedConversations", fields: [assignedToId], references: [id])
+  startedAt       DateTime            @default(now())
+  endedAt         DateTime?
+  lastMessageAt   DateTime            @default(now())
+
+  messages        Message[]
+
+  @@map("conversations")
+}
+
+// Message model
+model Message {
+  id              String       @id @default(uuid())
+  conversationId  String
+  conversation    Conversation @relation(fields: [conversationId], references: [id])
+  sender          MessageSender
+  content         String       @db.Text
+  mediaUrl        String?
+  isRead          Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+
+  @@map("messages")
+}
+
+// Appointment (Pré-cadastro/Agendamento)
+model Appointment {
+  id              String              @id @default(uuid())
+  tutorId         String
+  tutor           Tutor               @relation(fields: [tutorId], references: [id])
+  petId           String?
+  pet             Pet?                @relation(fields: [petId], references: [id])
+  serviceType     String
+  preferredTime   String?
+  status          AppointmentStatus   @default(PENDING)
+  notes           String?             @db.Text
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@map("appointments")
+}
+
+// Knowledge Base (Base de conhecimento)
+model KnowledgeBase {
+  id          String   @id @default(uuid())
+  title       String
+  content     String   @db.Text
+  fileName    String?
+  fileType    String?
+  fileUrl     String?
+  isManual    Boolean  @default(false)
+  priority    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("knowledge_base")
+}
+
+// Service/Price Table
+model Service {
+  id          String   @id @default(uuid())
+  name        String
+  category    String
+  price       Decimal  @db.Decimal(10, 2)
+  description String?  @db.Text
+  duration    Int?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("services")
+}
+
+// Audit Log
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  action      String
+  description String   @db.Text
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+// Lead Classification
+model Lead {
+  id              String     @id @default(uuid())
+  tutorId         String
+  tutor           Tutor      @relation(fields: [tutorId], references: [id])
+  classification  LeadStatus @default(INTERESTED)
+  source          String
+  lastContact     DateTime   @default(now())
+  followUpDate    DateTime?
+  notes           String?    @db.Text
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@map("leads")
+}
+
+// System Configuration
+model SystemConfig {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String   @db.Text
+  category    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_configs")
+}
+
+// Emergency Alert
+model EmergencyAlert {
+  id              String   @id @default(uuid())
+  conversationId  String
+  triggerWord     String
+  messageContent  String   @db.Text
+  isResolved      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  resolvedAt      DateTime?
+
+  @@map("emergency_alerts")
+}
+
+// Daily Backup
+model Backup {
+  id          String   @id @default(uuid())
+  fileName    String
+  fileSize    Int
+  fileUrl     String
+  status      String
+  createdAt   DateTime @default(now())
+
+  @@map("backups")
+}
+
+// Quality Score (Modo Supervisor)
+model QualityScore {
+  id              String   @id @default(uuid())
+  conversationId  String
+  score           Int      // 0-100
+  responseQuality Int?     // 0-100
+  responseTime    Int?     // seconds
+  converted       Boolean  @default(false)
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+
+  @@map("quality_scores")
+}
